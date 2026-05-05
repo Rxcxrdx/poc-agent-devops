@@ -89,6 +89,38 @@ jobs:
           name: coverage-lcov
           path: coverage
 
+      - name: Convert LCOV → Generic Coverage XML (formato que espera SonarCloud)
+        run: |
+          python3 - <<'EOF'
+          import re, os
+          lcov = "coverage/lcov.info"
+          out  = "coverage/generic-coverage.xml"
+          if not os.path.exists(lcov) or os.path.getsize(lcov) == 0:
+              print("⚠️  lcov.info vacío o no existe — se omite coverage")
+              open(out, "w").write('<coverage version="1"/>\n')
+              exit(0)
+          files = {}
+          cur = None
+          for line in open(lcov):
+              line = line.strip()
+              if line.startswith("SF:"):
+                  cur = line[3:]
+                  files[cur] = {}
+              elif line.startswith("DA:") and cur:
+                  parts = line[3:].split(",")
+                  if len(parts) >= 2:
+                      files[cur][parts[0]] = int(parts[1]) > 0
+          with open(out, "w") as f:
+              f.write('<coverage version="1">\n')
+              for path, lines in files.items():
+                  f.write(f'  <file path="{path}">\n')
+                  for ln, covered in sorted(lines.items(), key=lambda x: int(x[0])):
+                      f.write(f'    <lineToCover lineNumber="{ln}" covered="{"true" if covered else "false"}"/>\n')
+                  f.write("  </file>\n")
+              f.write("</coverage>\n")
+          print(f"✅ Convertido: {len(files)} archivos → {out}")
+          EOF
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
