@@ -4,6 +4,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
+    #[allow(dead_code)]
     #[error("recurso no encontrado")]
     NotFound,
     #[error("error interno del servidor")]
