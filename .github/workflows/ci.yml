@@ -37,19 +37,38 @@ jobs:
           key: cargo-${{ hashFiles('services/*/Cargo.lock', 'services/*/Cargo.toml') }}
           restore-keys: cargo-
 
-      - name: cargo test + clippy en cada servicio
+      - name: Install cargo-llvm-cov (cobertura)
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: cargo test + clippy + coverage en cada servicio
         run: |
           set -e
+          mkdir -p coverage
+          # LCOV combinado de todos los servicios para SonarCloud
+          : > coverage/lcov.info
           for svc in services/*/; do
             name=$(basename "$svc")
             echo ""
             echo "══════════════════════════════════════════════════════════"
             echo "▶ $name"
             echo "══════════════════════════════════════════════════════════"
-            (cd "$svc" && cargo test && cargo clippy -- -D warnings) \
-              || { echo "❌ $name FAILED"; exit 1; }
+            (
+              cd "$svc"
+              cargo test
+              cargo clippy -- -D warnings
+              # Genera lcov por servicio y lo concatena al global
+              cargo llvm-cov --lcov --output-path "../../coverage/${name}.lcov" || true
+            ) || { echo "❌ $name FAILED"; exit 1; }
+            cat "coverage/${name}.lcov" >> coverage/lcov.info 2>/dev/null || true
             echo "✅ $name OK"
           done
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 1
 
   # ── JOB 2: SonarCloud analiza TODO el repo (1 solo proyecto) ───────────────
   # PUNTO CLAVE DEL DEMO: SonarCloud analiza todos los servicios y pasa.
@@ -64,12 +83,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # Expected: PASS ✅ para ambos servicios — demuestra limitación de Sonar:
-        # no detecta violaciones semánticas ni arquitecturales (BOX-001/002/003)
+        # Sonar analiza: bugs, vulnerabilities, security hotspots, code smells,
+        # cognitive complexity, duplicaciones y cobertura (lcov.info)
+        # Expected: PASS ✅ — demuestra limitación de Sonar para reglas
+        # arquitecturales/semánticas (BOX-001/002/003, OCI-003/004/005)
 
   # ── JOB 3: Conformance Gate — evalúa TODOS los servicios automáticamente ────
   # Un solo job escanea services/ completo.

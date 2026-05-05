@@ -7,6 +7,68 @@
 
 ---
 
+## 🟢 ESTADO ACTUAL — sesión 2026-05-05
+
+### Pipeline en producción (live en GitHub)
+
+```
+test-services  →  sonarcloud  →  conformance
+   (auto)         (todo repo)    (auto, todos los servicios)
+```
+
+**3 jobs totales**, todos con auto-discovery de `services/*`. Agregar un servicio nuevo NO requiere editar `ci.yml`.
+
+### Repos vivos
+
+| Repo | URL | Estado |
+|------|-----|--------|
+| `Rxcxrdx/conformance-agent` | github.com/Rxcxrdx/conformance-agent | ✅ tag v2 (soporta `services-dir`) |
+| `Rxcxrdx/poc-agent-devops` | github.com/Rxcxrdx/poc-agent-devops | ✅ CI corriendo |
+| SonarCloud project | sonarcloud.io/project/overview?id=Rxcxrdx_poc-agent-devops | ✅ Org `devyzr`, key `Rxcxrdx_poc-agent-devops` |
+
+### Qué analiza cada herramienta (resumen)
+
+| Job | Herramienta | Detecta | NO detecta |
+|-----|-------------|---------|------------|
+| `test-services` | `cargo test` + `cargo clippy -D warnings` + `cargo-llvm-cov` | Errores compilación, lints estándar, genera lcov coverage | Reglas arquitecturales custom |
+| `sonarcloud` | SonarCloud (Sonar way QG) | Bugs, vulnerabilities, security hotspots, code smells, cognitive complexity, duplicaciones, coverage % | BOX-001/002/003, OCI-003/004/005 |
+| `conformance` | OpenCode SDK + Claude Sonnet 4.6 | BOX-001 (envelope ApiResponse), BOX-002 (.unwrap()/.expect()), BOX-003 (capas/arquitectura), OCI-003/004/005 (Dockerfile) | — |
+
+### SonarCloud — qué métricas se publican
+
+Configurado en `sonar-project.properties` (raíz del repo):
+- **Project key**: `Rxcxrdx_poc-agent-devops`
+- **Organization**: `devyzr`
+- **Sources**: `services/` (todos los microservicios en un solo proyecto)
+- **Coverage report**: `coverage/lcov.info` (generado por `cargo-llvm-cov` en el job de tests, descargado vía artifact)
+- **Quality Gate**: `Sonar way` (default) — bloquea si: bugs nuevos, vulnerabilities nuevas, hotspots sin revisar, coverage nuevo < 80%, duplicación nueva > 3%
+
+### Secrets configurados en GitHub
+
+| Secret | Uso | Estado |
+|--------|-----|--------|
+| `SONAR_TOKEN` | Auth con sonarcloud.io | ✅ configurado |
+| `ANTHROPIC_API_KEY` | Auth para OpenCode SDK + Claude | ⏳ pendiente del usuario |
+
+### Próximos pasos pendientes
+
+1. ⏳ Usuario añade `ANTHROPIC_API_KEY` como secret en GitHub
+2. ⏳ Verificar pipeline completo: `test-services ✅ → sonarcloud ✅ → conformance` debe mostrar `rust-svc PASS / rust-svc-bad BLOCK`
+3. ⏳ Configurar Branch Protection Rules en `main` para requerir los 3 jobs como required status checks
+4. (Opcional) Crear servicio `services/nuevo-svc/` para demostrar auto-discovery sin tocar ci.yml
+
+### Archivos clave del estado actual
+
+| Archivo | Cambio reciente |
+|---------|-----------------|
+| `poc-agent-devops/.github/workflows/ci.yml` | Refactorizado a 3 jobs con auto-discovery + cobertura |
+| `poc-agent-devops/sonar-project.properties` | Header documenta exactamente qué Sonar revisa y qué NO; añadido `coverageReportPaths` |
+| `poc-agent-devops/services/rust-svc/src/error.rs` | `#[allow(dead_code)]` en variant `NotFound` para pasar clippy `-D warnings` |
+| `conformance-agent/action.yml` | Nuevo input opcional `services-dir` (además de `service-path`) |
+| `conformance-agent/src/index.ts` | Auto-descubre servicios cuando `INPUT_SERVICES_DIR` está set; decisión global `block` si cualquier servicio bloquea |
+
+---
+
 ## ★ ESTADO ACTUAL — sesión 2026-05-04 (actualizado al cierre)
 
 ### Estructura de repos (DECISIÓN FINAL)
