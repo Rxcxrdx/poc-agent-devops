@@ -29,10 +29,7 @@ mod tests {
     use axum_test::TestServer;
 
     fn test_server() -> TestServer {
-        let state = Arc::new(AppState {
-            version: "test".into(),
-            http: reqwest::Client::new(),
-        });
+        let state = Arc::new(AppState::new("test"));
         TestServer::new(router().with_state(state))
     }
 

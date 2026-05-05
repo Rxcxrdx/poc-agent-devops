@@ -19,10 +19,7 @@ async fn main() {
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let state = Arc::new(AppState {
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        http: reqwest::Client::new(),
-    });
+    let state = Arc::new(AppState::new(env!("CARGO_PKG_VERSION")));
 
     // Rutas con estado — se resuelve el estado antes de unir SwaggerUi
     let api = Router::new()
