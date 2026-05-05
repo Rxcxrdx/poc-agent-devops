@@ -12,9 +12,12 @@ on:
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
-  # ── JOB 1a: Tests del servicio conforme ────────────────────────────────────
-  test-rust-svc:
-    name: "rust-svc · cargo test + clippy"
+  # ── JOB 1: Tests + clippy de TODOS los servicios (auto-discovery) ──────────
+  # Un solo job recorre services/* y ejecuta cargo test + clippy en cada uno.
+  # Si agregas services/nuevo-svc/ se incluye automáticamente — no editar yml.
+  # Demuestra: cargo + clippy NO detectan violaciones BOX-001/002/003.
+  test-services:
+    name: "cargo test + clippy · todos los servicios"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,58 +33,31 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            services/rust-svc/target
-          key: rust-svc-${{ hashFiles('services/rust-svc/Cargo.lock') }}
-          restore-keys: rust-svc-
+            services/*/target
+          key: cargo-${{ hashFiles('services/*/Cargo.lock', 'services/*/Cargo.toml') }}
+          restore-keys: cargo-
 
-      - name: cargo test
-        working-directory: services/rust-svc
-        run: cargo test
-
-      - name: cargo clippy
-        working-directory: services/rust-svc
-        run: cargo clippy -- -D warnings
-
-  # ── JOB 1b: Compilación del servicio no conforme ───────────────────────────
-  # Demuestra que cargo test y clippy NO detectan las violaciones BOX
-  test-rust-svc-bad:
-    name: "rust-svc-bad · cargo test (compila, 0 tests)"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            services/rust-svc-bad/target
-          key: rust-svc-bad-${{ hashFiles('services/rust-svc-bad/Cargo.toml') }}
-          restore-keys: rust-svc-bad-
-
-      - name: cargo test
-        working-directory: services/rust-svc-bad
-        run: cargo test
-        # Passes: 0 tests found, binary compiles OK
-
-      - name: "cargo clippy (unwrap tampoco falla por defecto)"
-        working-directory: services/rust-svc-bad
-        run: cargo clippy
-        # Passes: clippy::unwrap_used is NOT enabled by default
+      - name: cargo test + clippy en cada servicio
+        run: |
+          set -e
+          for svc in services/*/; do
+            name=$(basename "$svc")
+            echo ""
+            echo "══════════════════════════════════════════════════════════"
+            echo "▶ $name"
+            echo "══════════════════════════════════════════════════════════"
+            (cd "$svc" && cargo test && cargo clippy -- -D warnings) \
+              || { echo "❌ $name FAILED"; exit 1; }
+            echo "✅ $name OK"
+          done
 
   # ── JOB 2: SonarCloud analiza TODO el repo (1 solo proyecto) ───────────────
-  # PUNTO CLAVE DEL DEMO: SonarCloud analiza ambos servicios y pasa los dos.
+  # PUNTO CLAVE DEL DEMO: SonarCloud analiza todos los servicios y pasa.
   # No tiene reglas para BOX-001/002/003 (envelope, panics, arquitectura).
   # Solo el Conformance Gate detectará las violaciones en rust-svc-bad.
   sonarcloud:
     name: "SonarCloud · análisis completo del repo"
-    needs: [test-rust-svc, test-rust-svc-bad]
+    needs: [test-services]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
