@@ -64,10 +64,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         # Expected: PASS ✅ para ambos servicios — demuestra limitación de Sonar:
         # no detecta violaciones semánticas ni arquitecturales (BOX-001/002/003)
