@@ -75,31 +75,13 @@ jobs:
         run: cargo clippy
         # Passes: clippy::unwrap_used is NOT enabled by default
 
-  # ── JOB 2a: SonarCloud analiza rust-svc ────────────────────────────────────
-  sonarcloud-rust-svc:
-    name: "rust-svc · SonarCloud"
-    needs: [test-rust-svc]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Shallow clones disabled for better relevancy analysis
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: services/rust-svc
-        # Expected: PASS ✅ — SonarCloud no detecta violaciones BOX
-
-  # ── JOB 2b: SonarCloud analiza rust-svc-bad ────────────────────────────────
-  # PUNTO CLAVE DEL DEMO: SonarCloud pasa incluso en el servicio no conforme
-  # porque BOX-001/002/003 no son reglas estándar de SonarQube
-  sonarcloud-rust-svc-bad:
-    name: "rust-svc-bad · SonarCloud (pasará — demuestra limitación)"
-    needs: [test-rust-svc-bad]
+  # ── JOB 2: SonarCloud analiza TODO el repo (1 solo proyecto) ───────────────
+  # PUNTO CLAVE DEL DEMO: SonarCloud analiza ambos servicios y pasa los dos.
+  # No tiene reglas para BOX-001/002/003 (envelope, panics, arquitectura).
+  # Solo el Conformance Gate detectará las violaciones en rust-svc-bad.
+  sonarcloud:
+    name: "SonarCloud · análisis completo del repo"
+    needs: [test-rust-svc, test-rust-svc-bad]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,17 +93,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: services/rust-svc-bad
-        # Expected: PASS ✅ — SonarCloud no tiene reglas para envelope de respuesta,
-        # arquitectura hexagonal, ni contratos de API implícitos
+        # Expected: PASS ✅ para ambos servicios — demuestra limitación de Sonar:
+        # no detecta violaciones semánticas ni arquitecturales (BOX-001/002/003)
 
   # ── JOB 3a: Conformance Gate en rust-svc ───────────────────────────────────
-  # Usa la GitHub Action local ./conformance — cuando se suba a su propio repo
-  # solo cambia a: uses: tu-org/conformance-gate@v1
   conformance-rust-svc:
     name: "rust-svc · Conformance Gate (OpenCode + IA)"
-    needs: [sonarcloud-rust-svc]
+    needs: [sonarcloud]
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -138,7 +116,7 @@ jobs:
   # PUNTO CLAVE DEL DEMO: El agente detecta y bloquea lo que SonarCloud no vio
   conformance-rust-svc-bad:
     name: "rust-svc-bad · Conformance Gate (OpenCode + IA — debe bloquear)"
-    needs: [sonarcloud-rust-svc-bad]
+    needs: [sonarcloud]
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -151,3 +129,4 @@ jobs:
           service-path: services/rust-svc-bad
         # Expected: BLOCK ❌ — exit 1 (OCI-003 critical + BOX-001/002 high)
         # Este job falla intencionalmente para bloquear el merge
+
