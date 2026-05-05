@@ -96,9 +96,12 @@ jobs:
         # Expected: PASS ✅ para ambos servicios — demuestra limitación de Sonar:
         # no detecta violaciones semánticas ni arquitecturales (BOX-001/002/003)
 
-  # ── JOB 3a: Conformance Gate en rust-svc ───────────────────────────────────
-  conformance-rust-svc:
-    name: "rust-svc · Conformance Gate (OpenCode + IA)"
+  # ── JOB 3: Conformance Gate — evalúa TODOS los servicios automáticamente ────
+  # Un solo job escanea services/ completo.
+  # Si agregas services/nuevo-svc/ no hace falta tocar este archivo.
+  # PUNTO CLAVE DEL DEMO: rust-svc pasa ✅, rust-svc-bad bloquea ❌
+  conformance:
+    name: "Conformance Gate · todos los servicios (IA)"
     needs: [sonarcloud]
     runs-on: ubuntu-latest
     env:
@@ -107,26 +110,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Conformance Gate
-        uses: Rxcxrdx/conformance-agent@v1
+        uses: Rxcxrdx/conformance-agent@v2
         with:
-          service-path: services/rust-svc
-        # Expected: PASS ✅ — exit 0
-
-  # ── JOB 3b: Conformance Gate en rust-svc-bad ───────────────────────────────
-  # PUNTO CLAVE DEL DEMO: El agente detecta y bloquea lo que SonarCloud no vio
-  conformance-rust-svc-bad:
-    name: "rust-svc-bad · Conformance Gate (OpenCode + IA — debe bloquear)"
-    needs: [sonarcloud]
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run Conformance Gate
-        uses: Rxcxrdx/conformance-agent@v1
-        with:
-          service-path: services/rust-svc-bad
-        # Expected: BLOCK ❌ — exit 1 (OCI-003 critical + BOX-001/002 high)
-        # Este job falla intencionalmente para bloquear el merge
+          services-dir: services
+        # rust-svc  → PASS ✅
+        # rust-svc-bad → BLOCK ❌ (OCI-003 + BOX-001/002)
+        # job exits 1 → merge bloqueado
 
