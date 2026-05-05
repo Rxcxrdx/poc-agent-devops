@@ -1,0 +1,153 @@
+name: CI + Conformance Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# ─── SECRETS REQUIRED ────────────────────────────────────────────────────────
+# SONAR_TOKEN      → sonarcloud.io → My Account → Security → Generate Token
+# ANTHROPIC_API_KEY → console.anthropic.com → API Keys
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  # ── JOB 1a: Tests del servicio conforme ────────────────────────────────────
+  test-rust-svc:
+    name: "rust-svc · cargo test + clippy"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            services/rust-svc/target
+          key: rust-svc-${{ hashFiles('services/rust-svc/Cargo.lock') }}
+          restore-keys: rust-svc-
+
+      - name: cargo test
+        working-directory: services/rust-svc
+        run: cargo test
+
+      - name: cargo clippy
+        working-directory: services/rust-svc
+        run: cargo clippy -- -D warnings
+
+  # ── JOB 1b: Compilación del servicio no conforme ───────────────────────────
+  # Demuestra que cargo test y clippy NO detectan las violaciones BOX
+  test-rust-svc-bad:
+    name: "rust-svc-bad · cargo test (compila, 0 tests)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            services/rust-svc-bad/target
+          key: rust-svc-bad-${{ hashFiles('services/rust-svc-bad/Cargo.toml') }}
+          restore-keys: rust-svc-bad-
+
+      - name: cargo test
+        working-directory: services/rust-svc-bad
+        run: cargo test
+        # Passes: 0 tests found, binary compiles OK
+
+      - name: "cargo clippy (unwrap tampoco falla por defecto)"
+        working-directory: services/rust-svc-bad
+        run: cargo clippy
+        # Passes: clippy::unwrap_used is NOT enabled by default
+
+  # ── JOB 2a: SonarCloud analiza rust-svc ────────────────────────────────────
+  sonarcloud-rust-svc:
+    name: "rust-svc · SonarCloud"
+    needs: [test-rust-svc]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones disabled for better relevancy analysis
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: services/rust-svc
+        # Expected: PASS ✅ — SonarCloud no detecta violaciones BOX
+
+  # ── JOB 2b: SonarCloud analiza rust-svc-bad ────────────────────────────────
+  # PUNTO CLAVE DEL DEMO: SonarCloud pasa incluso en el servicio no conforme
+  # porque BOX-001/002/003 no son reglas estándar de SonarQube
+  sonarcloud-rust-svc-bad:
+    name: "rust-svc-bad · SonarCloud (pasará — demuestra limitación)"
+    needs: [test-rust-svc-bad]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: services/rust-svc-bad
+        # Expected: PASS ✅ — SonarCloud no tiene reglas para envelope de respuesta,
+        # arquitectura hexagonal, ni contratos de API implícitos
+
+  # ── JOB 3a: Conformance Gate en rust-svc ───────────────────────────────────
+  # Usa la GitHub Action local ./conformance — cuando se suba a su propio repo
+  # solo cambia a: uses: tu-org/conformance-gate@v1
+  conformance-rust-svc:
+    name: "rust-svc · Conformance Gate (OpenCode + IA)"
+    needs: [sonarcloud-rust-svc]
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Conformance Gate
+        uses: Rxcxrdx/conformance-agent@v1
+        with:
+          service-path: services/rust-svc
+        # Expected: PASS ✅ — exit 0
+
+  # ── JOB 3b: Conformance Gate en rust-svc-bad ───────────────────────────────
+  # PUNTO CLAVE DEL DEMO: El agente detecta y bloquea lo que SonarCloud no vio
+  conformance-rust-svc-bad:
+    name: "rust-svc-bad · Conformance Gate (OpenCode + IA — debe bloquear)"
+    needs: [sonarcloud-rust-svc-bad]
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Conformance Gate
+        uses: Rxcxrdx/conformance-agent@v1
+        with:
+          service-path: services/rust-svc-bad
+        # Expected: BLOCK ❌ — exit 1 (OCI-003 critical + BOX-001/002 high)
+        # Este job falla intencionalmente para bloquear el merge

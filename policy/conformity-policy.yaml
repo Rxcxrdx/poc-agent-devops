@@ -1,0 +1,105 @@
+policy_version: "1.0.0"
+effective_date: "2026-05-04"
+description: >
+  Estándar de conformidad para servicios Rust en este proyecto.
+  Toda caja debe cumplir estas reglas antes de merge a main.
+
+# ─── CALIDAD DE CÓDIGO ────────────────────────────────────────────────────────
+# Validadas por el agente autónomo (LLM) en CI
+
+rules:
+
+  - id: BOX-001
+    name: response_shape_homogeneous
+    category: quality
+    severity: high
+    description: >
+      Todos los endpoints usan el mismo envelope de respuesta.
+      Éxito: { "success": true, "data": <payload> }
+      Error: { "success": false, "error": "<mensaje>" }
+    how_to_check: LLM — revisar todos los handlers en routes/
+
+  - id: BOX-002
+    name: no_panics_exposed
+    category: quality
+    severity: high
+    description: >
+      Código de producción no contiene .unwrap(), .expect() ni panic!().
+      Los errores se propagan con ? y se mapean a AppError.
+    how_to_check: LLM — buscar .unwrap() y .expect() en src/ excluyendo #[cfg(test)]
+
+  - id: BOX-003
+    name: hexagonal_structure
+    category: quality
+    severity: low
+    description: >
+      Separación estricta domain / routes.
+      La lógica de negocio vive en domain/, los handlers en routes/ solo orquestan.
+    how_to_check: LLM — verificar que routes/ no contiene lógica de negocio inline
+
+  - id: BOX-004
+    name: swagger_ui_accessible
+    category: api
+    severity: high
+    description: >
+      GET /swagger-ui/ sirve la UI interactiva de Swagger apuntando a /openapi.json.
+      Permite probar endpoints en local sin herramientas externas.
+    how_to_check: HTTP GET /swagger-ui/ — debe responder 200 con HTML
+
+# ─── ENDPOINTS OBLIGATORIOS ───────────────────────────────────────────────────
+# Validadas con HTTP real en CI
+
+  - id: OCI-006
+    name: openapi_spec_accessible
+    category: api
+    severity: high
+    description: >
+      GET /openapi.json responde 200 con campo "openapi" en el body.
+    how_to_check: HTTP GET al servicio corriendo
+
+  - id: OCI-007
+    name: health_endpoint_responding
+    category: api
+    severity: critical
+    description: >
+      GET /health responde 200 con campo "status" en data.
+    how_to_check: HTTP GET al servicio corriendo
+
+# ─── DOCKERFILE ───────────────────────────────────────────────────────────────
+# Validadas con análisis estático del Dockerfile
+
+  - id: OCI-003
+    name: healthcheck_defined
+    category: runtime
+    severity: critical
+    description: >
+      HEALTHCHECK declarado en el Dockerfile.
+    how_to_check: grep HEALTHCHECK en el Dockerfile
+
+  - id: OCI-004
+    name: nonroot_user
+    category: security
+    severity: high
+    description: >
+      La imagen corre como usuario no-root (USER nonroot).
+    how_to_check: grep USER en el Dockerfile — no debe ser root ni 0
+
+  - id: OCI-005
+    name: labels_required
+    category: metadata
+    severity: high
+    required_labels:
+      - org.opencontainers.image.version
+      - org.opencontainers.image.revision
+      - org.opencontainers.image.source
+      - com.conformance.owner
+      - com.conformance.policy-version
+    description: >
+      Todos los labels obligatorios presentes en el Dockerfile como ARG + LABEL.
+    how_to_check: verificar que el Dockerfile define todos los LABEL como build-args
+
+# ─── RESUMEN DE SEVERIDADES ───────────────────────────────────────────────────
+#
+#  critical → bloquea el merge inmediatamente
+#  high     → bloquea si hay 2 o más, o pasa a manual_review si hay 1
+#  low      → warning, no bloquea
