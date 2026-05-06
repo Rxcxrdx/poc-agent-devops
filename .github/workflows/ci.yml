@@ -112,10 +112,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Conformance Gate
-        uses: Rxcxrdx/conformance-agent@v6.2
+        uses: Rxcxrdx/conformance-agent@v6.3
         with:
           services-dir: services
         # rust-svc  → PASS ✅
         # rust-svc-bad → BLOCK ❌ (OCI-003 + BOX-001/002)
         # job exits 1 → merge bloqueado
-
