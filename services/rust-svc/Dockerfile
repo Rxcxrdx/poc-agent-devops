@@ -8,7 +8,7 @@ COPY src ./src
 RUN cargo build --release
 
 # ── stage 2: runtime ────────────────────────────────────────────────────────
-FROM gcr.io/distroless/cc-debian12 AS runtime
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 
 # OCI labels inyectados en build time (requeridos por OCI-005)
 ARG OCI_VERSION=0.1.0

@@ -13,7 +13,7 @@ use state::AppState;
 use routes::openapi::ApiDoc;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().json())
         .with(tracing_subscriber::EnvFilter::from_default_env())
@@ -34,11 +34,11 @@ async fn main() {
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .expect("failed to bind port 3000");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
 
     tracing::info!("rust-svc listening on 0.0.0.0:3000");
     tracing::info!("Swagger UI → http://localhost:3000/swagger-ui/");
-    axum::serve(listener, app).await.expect("server error");
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
