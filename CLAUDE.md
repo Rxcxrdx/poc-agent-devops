@@ -45,19 +45,28 @@ services/<nombre-svc>/
 
 ## BOX-001 — Envelope de respuesta homogéneo (obligatorio)
 
-Todos los endpoints deben devolver el mismo shape. Sin excepciones.
+Todos los endpoints de negocio deben devolver el mismo shape.
 
 **Éxito:**
+
 ```json
 { "success": true, "data": <payload> }
 ```
 
 **Error:**
+
 ```json
 { "success": false, "error": "<mensaje legible>" }
 ```
 
 Implementa esto en `error.rs` con `IntoResponse` y úsalo en todos los handlers.
+
+**Excepciones de infraestructura (NO usar envelope):**
+
+- `GET /openapi.json` → retorna el spec OpenAPI crudo (formato estándar requerido por Swagger UI y otras herramientas)
+- `GET /swagger-ui/*` → assets de la UI, exento por definición
+
+El agente de CI **no penalizará** estos dos endpoints por no usar el envelope.
 
 ---
 
@@ -111,6 +120,7 @@ GET /swagger-ui/   → UI interactiva (BOX-004)
 ## Tests (obligatorios en cada route)
 
 Cada archivo en `routes/` debe tener un bloque `#[cfg(test)]` con al menos:
+
 - Un test que valide el status HTTP
 - Un test que valide el shape de la respuesta
 
@@ -121,6 +131,7 @@ Usa `axum-test::TestServer`. Ver skill: `.claude/sk/add-tests.md`
 ## Dockerfile (obligatorio)
 
 Reglas no negociables:
+
 1. **Multi-stage** — stage `builder` (rust:slim) + stage `runtime` (distroless)
 2. **USER nonroot** — nunca correr como root
 3. **HEALTHCHECK** definido con el binario propio
@@ -137,11 +148,11 @@ Reglas no negociables:
 
 Usa estas skills para tareas comunes:
 
-| Tarea | Skill |
-|-------|-------|
-| Crear un nuevo endpoint | `.claude/commands/create-endpoint.md` |
-| Agregar tests a un route | `.claude/commands/add-tests.md` |
-| Patterns utoipa + axum | `.claude/commands/utoipa-axum.md` |
+| Tarea                    | Skill                                 |
+| ------------------------ | ------------------------------------- |
+| Crear un nuevo endpoint  | `.claude/commands/create-endpoint.md` |
+| Agregar tests a un route | `.claude/commands/add-tests.md`       |
+| Patterns utoipa + axum   | `.claude/commands/utoipa-axum.md`     |
 
 ---
 

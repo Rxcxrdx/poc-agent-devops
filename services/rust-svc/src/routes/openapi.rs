@@ -1,4 +1,4 @@
-use axum::{routing::get, Json, Router};
+use axum::{response::IntoResponse, routing::get, Json, Router};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use crate::{domain::news::NewsItem, state::AppState};
@@ -18,9 +18,15 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new().route("/openapi.json", get(openapi_handler))
 }
 
-async fn openapi_handler() -> Json<serde_json::Value> {
-    let spec = ApiDoc::openapi();
-    Json(serde_json::to_value(spec).unwrap_or_default())
+async fn openapi_handler() -> impl IntoResponse {
+    match serde_json::to_value(ApiDoc::openapi()) {
+        Ok(spec) => (axum::http::StatusCode::OK, Json(spec)).into_response(),
+        Err(e) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        )
+            .into_response(),
+    }
 }
 
 #[cfg(test)]

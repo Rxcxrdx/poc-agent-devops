@@ -22,9 +22,16 @@ rules:
     validator: ai
     description: >
       Todos los endpoints usan el mismo envelope.
-      xito: { "success": true, "data": <payload> }
+      Éxito: { "success": true, "data": <payload> }
       Error: { "success": false, "error": "<mensaje>" }
-    how_to_check: AI revisa cada handler en routes/
+    exceptions:
+      - path: /openapi.json
+        reason: >
+          Debe retornar el spec OpenAPI en formato estándar (sin envelope).
+          La Swagger UI y otras herramientas consumen este endpoint directamente.
+      - path: /swagger-ui/*
+        reason: Sirve assets estáticos de la UI, exento por definición.
+    how_to_check: AI revisa cada handler en routes/ respetando las excepciones
 
   - id: BOX-002
     name: no_panics_exposed
