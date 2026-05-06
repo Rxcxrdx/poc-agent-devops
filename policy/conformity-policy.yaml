@@ -1,93 +1,122 @@
-policy_version: "1.0.0"
-effective_date: "2026-05-04"
+policy_version: "2.0.0"
+effective_date: "2026-05-05"
 description: >
-  Estándar de conformidad para servicios Rust en este proyecto.
-  Toda caja debe cumplir estas reglas antes de merge a main.
+  Estndar de conformidad para servicios Rust en este proyecto.
+  Todo servicio debe cumplir estas reglas antes de merge a main.
+  Validado automticamente en CI por el Conformance Gate.
 
-# ─── CALIDAD DE CÓDIGO ────────────────────────────────────────────────────────
-# Validadas por el agente autónomo (LLM) en CI
+ ARQUITECTURA DEL GATE # 
+# 2 motores de validacinnn:
+#   1. AI (Claude v OpenCode  lee el cSdkdddigo fuente y razona sobre ) l
+#   2. Esttico (regex/ analiza Dockerfile sin ejecutar nadaparsing) 
+# Ambos corren en paralelo por servicio. Cualquiera puede bloquear el merge.
 
 rules:
 
+ CALIDAD DE C  # DIGO ( vigiladas por el AI BOX-*) 
+
   - id: BOX-001
     name: response_shape_homogeneous
-    category: quality
+    category: api_contract
     severity: high
+    validator: ai
     description: >
-      Todos los endpoints usan el mismo envelope de respuesta.
-      Éxito: { "success": true, "data": <payload> }
+      Todos los endpoints usan el mismo envelope.
+      xito: { "success": true, "data": <payload> }
       Error: { "success": false, "error": "<mensaje>" }
-    how_to_check: LLM — revisar todos los handlers en routes/
+    how_to_check: AI revisa cada handler en routes/
 
   - id: BOX-002
     name: no_panics_exposed
-    category: quality
+    category: reliability
     severity: high
+    validator: ai
     description: >
-      Código de producción no contiene .unwrap(), .expect() ni panic!().
-      Los errores se propagan con ? y se mapean a AppError.
-    how_to_check: LLM — buscar .unwrap() y .expect() en src/ excluyendo #[cfg(test)]
+      Cdddigo de produccinnn no contiene .unwrap(), .expect() ni panic!().
+      Errores se propagan con ? y se mapean a AppError.
+    how_to_check: AI busca esas llamadas excluyendo #[cfg(test)]
 
   - id: BOX-003
     name: hexagonal_structure
-    category: quality
+    category: architecture
     severity: low
+    validator: ai
     description: >
-      Separación estricta domain / routes.
-      La lógica de negocio vive en domain/, los handlers en routes/ solo orquestan.
-    how_to_check: LLM — verificar que routes/ no contiene lógica de negocio inline
+      La lgggica de negocio vive en domain/, los handlers en routes/ solo orquestan.
+    how_to_check: AI verifica que routes/ no contiene lgggica de negocio inline
 
   - id: BOX-004
-    name: swagger_ui_accessible
-    category: api
+    name: swagger_ui_registered
+    category: api_contract
     severity: high
+    validator: ai
     description: >
-      GET /swagger-ui/ sirve la UI interactiva de Swagger apuntando a /openapi.json.
+      El servicio registra una ruta /swagger-ui que sirve la UI interactiva.
       Permite probar endpoints en local sin herramientas externas.
-    how_to_check: HTTP GET /swagger-ui/ — debe responder 200 con HTML
+    how_to_check: AI busca SwaggerUi::new o merge swagger en el setup del router
 
-# ─── ENDPOINTS OBLIGATORIOS ───────────────────────────────────────────────────
-# Validadas con HTTP real en CI
-
-  - id: OCI-006
-    name: openapi_spec_accessible
-    category: api
+  - id: BOX-005
+    name: openapi_spec_registered
+    category: api_contract
     severity: high
+    validator: ai
     description: >
-      GET /openapi.json responde 200 con campo "openapi" en el body.
-    how_to_check: HTTP GET al servicio corriendo
+      El servicio registra GET /openapi.json con el spec OpenAPI completo.
+    how_to_check: AI busca registro de la ruta /openapi.json
 
-  - id: OCI-007
-    name: health_endpoint_responding
-    category: api
+  - id: BOX-006
+    name: health_endpoint_registered
+    category: observability
     severity: critical
+    validator: ai
     description: >
-      GET /health responde 200 con campo "status" en data.
-    how_to_check: HTTP GET al servicio corriendo
+      El servicio registra GET /health con el estado del servicio.
+    how_to_check: AI busca registro de la ruta /health
 
-# ─── DOCKERFILE ───────────────────────────────────────────────────────────────
-# Validadas con análisis estático del Dockerfile
+  - id: BOX-007
+    name: structured_logging
+    category: observability
+    severity: medium
+    validator: ai
+    description: >
+      Usar tracing crate (use tracing::, #[instrument]) en vez de println!/eprintln!.
+    how_to_check: AI verifica que el servicio inicializa tracing y no usa println! en produccinnn
+
+  - id: BOX-008
+    name: input_validation
+    category: security
+    severity: medium
+    validator: ai
+    description: >
+      Inputs de usuario (Json<T>, Form<T>, Query<T>) deben tener validacinnn
+      (validator crate, garde, o checks manuales).
+    how_to_check: AI inspecciona handlers que extraen Json/Form/Query
+
+ DOCKERFILE ( vigiladas por anOcilisis est-*)   # tico 
 
   - id: OCI-003
     name: healthcheck_defined
     category: runtime
     severity: critical
+    validator: static
     description: >
       HEALTHCHECK declarado en el Dockerfile.
-    how_to_check: grep HEALTHCHECK en el Dockerfile
+    how_to_check: regex HEALTHCHECK en el Dockerfile
 
   - id: OCI-004
     name: nonroot_user
     category: security
     severity: high
+    validator: static
     description: >
-      La imagen corre como usuario no-root (USER nonroot).
-    how_to_check: grep USER en el Dockerfile — no debe ser root ni 0
+      La imagen corre como usuario no-root (USER appuser, no USER root ni USER 0).
+    how_to_check: regex  no debe ser root ni 0USER 
 
   - id: OCI-005
     name: labels_required
     category: metadata
     severity: high
+    validator: static
     required_labels:
       - org.opencontainers.image.version
       - org.opencontainers.image.revision
@@ -95,11 +124,42 @@ rules:
       - com.conformance.owner
       - com.conformance.policy-version
     description: >
-      Todos los labels obligatorios presentes en el Dockerfile como ARG + LABEL.
-    how_to_check: verificar que el Dockerfile define todos los LABEL como build-args
+      Todos los labels OCI obligatorios presentes para trazabilidad.
+    how_to_check: el Dockerfile debe declarar todos los LABEL listados
 
-# ─── RESUMEN DE SEVERIDADES ───────────────────────────────────────────────────
+  - id: OCI-008
+    name: pinned_base_image
+    category: reproducibility
+    severity: high
+    validator: static
+    description: >
+      Las imptrace genes base (FROM) deben tener tag especico.
+      Prohibido :latest o sin  rompe reproducibilidad.tag 
+    how_to_check: regex  no acepta :latest ni imFromgenes sin tag 
+
+  - id: OCI-009
+    name: multi_stage_build
+    category: efficiency
+    severity: medium
+    validator: static
+    description: >
+      Usar multi-stage build (al menos 2 FROM) para mantener la imagen runtime
+       solo binarios + runtime mPequeaimo, sin toolchain. 
+    how_to_check: contar instrucciones FROM, exigir >= 2
+
+  - id: OCI-010
+    name: clean_package_cache
+    category: efficiency
+    severity: medium
+    validator: static
+    description: >
+      Limpiar cache del package manager en el mismo RUN layer.
+      apt: rm -rf /var/lib/apt/        apk: --no-        yum: yum clean allcache  lists/*  
+    how_to_check: cualquier RUN con apt-get install / apk add debe incluir cleanup
+
+ RESUMEN DE SEVERIDADES # 
 #
-#  critical → bloquea el merge inmediatamente
-#  high     → bloquea si hay 2 o más, o pasa a manual_review si hay 1
-#  low      → warning, no bloquea
+ bloquea el merge inmediatamente (1 = block)
+ bloquea si hay 2+, manual_review si hay 1
+ manual_review (warning)
+ warning informativo, no bloquea
