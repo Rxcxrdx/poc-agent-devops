@@ -8,6 +8,7 @@ use crate::{domain::news::NewsItem, state::AppState};
     paths(
         crate::routes::health::health_handler,
         crate::routes::news::news_handler,
+        crate::routes::news::devops_news_handler,
     ),
     components(schemas(NewsItem)),
     info(title = "rust-svc", version = "0.1.0", description = "API de ejemplo — PoC Conformance Gate")
