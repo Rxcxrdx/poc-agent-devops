@@ -112,7 +112,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Conformance Gate
-        uses: Rxcxrdx/conformance-agent@v6.4
+        uses: Rxcxrdx/conformance-agent@v6.5
         with:
           services-dir: services
         # rust-svc  → PASS ✅
