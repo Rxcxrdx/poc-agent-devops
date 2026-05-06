@@ -26,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(routes::health::router())
         .merge(routes::news::router())
         .merge(routes::openapi::router())
+        .merge(routes::stats::router())
         .with_state(state);
 
     // SwaggerUi es stateless — usa /api-docs/openapi.json para no colisionar con /openapi.json
